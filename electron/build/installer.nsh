@@ -2,17 +2,6 @@
   ; 自定义安装程序头部
 !macroend
 
-!macro preInit
-  ; 初始化前执行
-  ; 检查是否正在运行
-  FindWindow $0 "Maxclaw" ""
-  StrCmp $0 0 +3
-    MessageBox MB_OKCANCEL|MB_ICONEXCLAMATION "Maxclaw is currently running. $
-Please close it before continuing." IDOK preInit IDCANCEL quit
-    quit:
-      Quit
-!macroend
-
 !macro customInit
   ; 自定义初始化
 !macroend
@@ -50,9 +39,7 @@ Please close it before continuing." IDOK preInit IDCANCEL quit
   ; EnVar::DeleteValue "PATH" "$INSTDIR"
 
   ; 删除用户数据（如果用户选择）
-  MessageBox MB_YESNO|MB_ICONQUESTION "Do you want to remove all user data (settings, sessions, etc.)?$
-$
-This cannot be undone." IDYES removeData IDNO skipRemove
+  MessageBox MB_YESNO|MB_ICONQUESTION "Do you want to remove all user data (settings, sessions, etc.)?$\r$\n$\r$\nThis cannot be undone." /SD IDNO IDYES removeData IDNO skipRemove
 
   removeData:
     DetailPrint "Removing user data..."

@@ -56,9 +56,9 @@ jobs:
 
       - name: Build Electron app (macOS)
         working-directory: electron
-        run: npm run dist:mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run build
+          npm run dist:mac -- --publish never
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -98,11 +98,30 @@ jobs:
           go build -o build/maxclaw.exe ./cmd/maxclaw
           go build -o build/maxclaw-gateway.exe ./cmd/maxclaw-gateway
 
-      - name: Build Electron app (Windows)
+      - name: Compile Electron app (Windows)
         working-directory: electron
-        run: npm run dist:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build
+
+      - name: Package Electron app (Windows)
+        working-directory: electron
+        run: npm run dist:win -- --publish never
+
+      - name: Verify Windows executables
+        shell: pwsh
+        run: |
+          $version = (Get-Content electron/package.json -Raw | ConvertFrom-Json).version
+          $executables = @(
+            "electron/release/Maxclaw-$version-Setup.exe"
+            "electron/release/Maxclaw-$version-Portable.exe"
+            'electron/release/win-unpacked/resources/bin/maxclaw.exe'
+            'electron/release/win-unpacked/resources/bin/maxclaw-gateway.exe'
+          )
+          foreach ($path in $executables) {
+            $file = Get-Item -LiteralPath $path -ErrorAction Stop
+            if ($file.Length -eq 0) { throw "Empty executable: $path" }
+          }
+          & 'electron/release/win-unpacked/resources/bin/maxclaw.exe' version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -110,7 +129,7 @@ jobs:
           name: windows-artifacts
           path: |
             electron/release/*.exe
-          if-no-files-found: warn
+          if-no-files-found: error
 
   # 构建 Linux 版本
   build-linux:
@@ -146,9 +165,9 @@ jobs:
 
       - name: Build Electron app (Linux)
         working-directory: electron
-        run: npm run dist:linux
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run build
+          npm run dist:linux -- --publish never
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4

@@ -46,7 +46,7 @@ nsis:
   artifactName: 'Maxclaw-${version}-Setup.${ext}'
   deleteAppDataOnUninstall: false
   include: build/installer.nsh
-  menuCategory: true
+  menuCategory: 'Lichas'
 portable:
   artifactName: 'Maxclaw-${version}-Portable.${ext}'
 linux:

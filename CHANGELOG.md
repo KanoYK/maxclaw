@@ -13,6 +13,9 @@
   - 验证：`go test ./internal/providers ./internal/config ./internal/webui`、`cd electron && npm run build`、`bash ./e2e_test/tools_test.sh`、`make build`
 
 ### Fixed
+- **修复桌面构建**：在三平台的打包阶段前编译 Electron 入口。Windows 安装器显式设置开始菜单文件夹，沿用 electron-builder 的运行中进程检查，并修正卸载提示的换行语法。Actions 验证并上传安装版和便携版 `.exe`。
+  - `.github/workflows/build-desktop.yml`、`electron/electron-builder.yml`、`electron/build/installer.nsh`
+  - 验证：`npm run build`、`npm run dist:win -- --publish never`、Windows 产物检查
 - **修复并发 running session 时中断串到别的会话**：`AgentLoop` 的中断上下文改为按 `sessionKey` 精确路由，不再用单个全局 `currentIC`；同时修正 WebSocket 中断/聊天消息把完整 `sessionKey` 又重复加上 `desktop:` 前缀的问题，确保当前选中会话的中断只作用于对应运行中的 session，并补充并发中断回归
   - `internal/agent/loop.go`、`internal/agent/loop_test.go`、`internal/webui/websocket.go`、`e2e_test/fake_openai_server.py`、`e2e_test/concurrent_interrupt_regression.sh`
   - 验证：`go test ./internal/agent -run "TestHandleInterruption"`、`bash ./e2e_test/concurrent_interrupt_regression.sh`、`make build`
