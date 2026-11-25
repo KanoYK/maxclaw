@@ -1,33 +1,35 @@
 import React, { useState } from 'react';
-import { ProviderConfig, ModelConfig } from '../types/providers';
+import { ProviderConfig, ModelConfig, isSubscriptionFormat, SUBSCRIPTION_PROVIDERS } from '../types/providers';
 import { useTranslation } from '../i18n';
 import { CustomSelect } from './CustomSelect';
 
 interface ProviderEditorProps {
   provider: ProviderConfig;
+  saving: boolean;
   onSave: (provider: ProviderConfig) => void;
   onTest: (provider: ProviderConfig) => Promise<{ success: boolean; latency?: number; error?: string }>;
   onFetchModels?: (provider: ProviderConfig) => Promise<{ success: boolean; models?: Array<{ id: string; name: string }>; error?: string }>;
   onCancel: () => void;
 }
 
-export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCancel }: ProviderEditorProps) {
+export function ProviderEditor({ provider, saving, onSave, onTest, onFetchModels, onCancel }: ProviderEditorProps) {
   const { t } = useTranslation();
   const [config, setConfig] = useState<ProviderConfig>(provider);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [fetching, setFetching] = useState(false);
   const [fetchResult, setFetchResult] = useState<{ success: boolean; message: string } | null>(null);
+  const subscription = isSubscriptionFormat(config.apiFormat) ? SUBSCRIPTION_PROVIDERS[config.apiFormat] : null;
 
   const handleTest = async () => {
-    if (!config.apiKey) return;
+    if (!subscription && !config.apiKey) return;
     setTesting(true);
     setTestResult(null);
     const result = await onTest(config);
     setTestResult({
       success: result.success,
       message: result.success
-        ? t('settings.providerEditor.testSuccess', { latency: result.latency || 0 })
+        ? subscription ? t('settings.subscription.connected') : t('settings.providerEditor.testSuccess', { latency: result.latency || 0 })
         : t('settings.providerEditor.testFailed', { error: result.error || '' }),
     });
     setTesting(false);
@@ -60,6 +62,21 @@ export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCanc
       <h3 className="mb-4 text-lg font-semibold">{t('settings.providerEditor.title', { name: config.name })}</h3>
 
       <div className="space-y-4">
+        {subscription ? (
+          <div className="space-y-2 rounded-lg border border-border bg-background p-4 text-sm">
+            <p>{t('settings.subscription.instructions')}</p>
+            <code className="inline-block select-all rounded bg-secondary px-2 py-1">{subscription.command}</code>
+            <button
+              type="button"
+              onClick={() => void window.electronAPI.system.openExternal(subscription.installURL)}
+              className="ml-3 text-primary hover:underline"
+            >
+              {t('settings.subscription.install')}
+            </button>
+            <p className="text-muted">{t('settings.subscription.textOnly')}</p>
+          </div>
+        ) : (
+        <>
         <div>
           <label className="mb-1 block text-sm font-medium">{t('settings.providerEditor.apiKey')}</label>
           <input
@@ -71,6 +88,8 @@ export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCanc
           />
         </div>
 
+        </>
+        )}
         <div>
           <label className="mb-1 block text-sm font-medium">{t('settings.providerEditor.baseUrl')}</label>
           <input
@@ -99,7 +118,7 @@ export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCanc
           <div className="mb-2 flex items-center justify-between">
             <label className="text-sm font-medium">{t('settings.providerEditor.models')}</label>
             <div className="flex items-center gap-3">
-              {onFetchModels && (
+              {!subscription && onFetchModels && (
                 <button
                   onClick={async () => {
                     if (!config.apiKey) return;
@@ -160,7 +179,7 @@ export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCanc
                   />
                   {t('settings.providerEditor.enable')}
                 </label>
-                <label className="flex items-center gap-1.5 whitespace-nowrap text-sm">
+                {!subscription && <label className="flex items-center gap-1.5 whitespace-nowrap text-sm">
                   <input
                     type="checkbox"
                     checked={model.supportsImageInput === true}
@@ -168,7 +187,7 @@ export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCanc
                     className="h-4 w-4"
                   />
                   {t('settings.providerEditor.multimodal')}
-                </label>
+                </label>}
                 <button
                   onClick={() => handleRemoveModel(index)}
                   className="px-2 text-danger hover:text-danger/80"
@@ -207,17 +226,19 @@ export function ProviderEditor({ provider, onSave, onTest, onFetchModels, onCanc
         <div className="flex gap-3 pt-4">
           <button
             onClick={handleTest}
-            disabled={testing || !config.apiKey}
+            disabled={testing || (!subscription && !config.apiKey)}
             className="rounded-lg border border-border px-4 py-2 text-sm hover:bg-secondary disabled:opacity-50"
           >
-            {testing ? t('settings.providerEditor.testing') : t('settings.providerEditor.testConnection')}
+            {testing ? t('settings.providerEditor.testing') : t(subscription ? 'settings.subscription.check' : 'settings.providerEditor.testConnection')}
           </button>
           <button
             onClick={() => onSave(config)}
-            disabled={!config.apiKey || config.models.length === 0}
+            disabled={saving || (subscription
+              ? testing || !testResult?.success || !config.models.some((model) => model.enabled && model.id.trim())
+              : !config.apiKey || config.models.length === 0)}
             className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {t('common.save')}
+            {t(subscription ? 'settings.subscription.save' : 'common.save')}
           </button>
           <button
             onClick={onCancel}

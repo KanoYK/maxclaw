@@ -273,9 +273,8 @@ var cronRunCmd = &cobra.Command{
 		}
 
 		apiKey := cfg.GetAPIKey("")
-		apiBase := cfg.GetAPIBase("")
-		if apiKey == "" {
-			return fmt.Errorf("no API key configured")
+		if apiKey == "" && providers.SubscriptionRoute(cfg.Agents.Defaults.Model) == "" {
+			return fmt.Errorf("select a subscription model or configure an API key")
 		}
 
 		storePath := filepath.Join(cfg.Agents.Defaults.Workspace, ".cron", "jobs.json")
@@ -283,7 +282,7 @@ var cronRunCmd = &cobra.Command{
 
 		// 设置任务处理器
 		service.SetJobHandler(func(job *cron.Job) (string, error) {
-			return executeCronJob(cfg, apiKey, apiBase, service, job)
+			return executeCronJob(service, job)
 		})
 
 		// 启动服务
@@ -309,11 +308,19 @@ var cronRunCmd = &cobra.Command{
 }
 
 // executeCronJob 执行定时任务
-func executeCronJob(cfg *config.Config, apiKey, apiBase string, cronService *cron.Service, job *cron.Job) (string, error) {
+func executeCronJob(cronService *cron.Service, job *cron.Job) (string, error) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		return "", err
+	}
+	apiKey := cfg.GetAPIKey("")
+	if apiKey == "" && providers.SubscriptionRoute(cfg.Agents.Defaults.Model) == "" {
+		return "", fmt.Errorf("select a subscription model or configure an API key")
+	}
 	// 创建 Provider
 	provider, err := providers.NewProvider(
 		apiKey,
-		apiBase,
+		cfg.GetAPIBase(""),
 		cfg.GetAPIFormat(cfg.Agents.Defaults.Model),
 		cfg.Agents.Defaults.Model,
 		cfg.Agents.Defaults.MaxTokens,

@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -727,6 +728,11 @@ func (a *AgentLoop) processMessageWithIC(ic *InterruptibleContext, msg *bus.Inbo
 			}
 			if chatErr == context.Canceled {
 				return nil, chatErr
+			}
+			// A subscription request must never switch to a usage-billed provider
+			// on login, model, or quota failures.
+			if errors.Is(chatErr, providers.ErrModelConfiguration) || providers.SubscriptionRoute(model) != "" {
+				return nil, fmt.Errorf("LLM stream error: %w", chatErr)
 			}
 
 			approxTokens := estimateMessagesTokensRough(convertProviderMessagesToCompressor(messages))

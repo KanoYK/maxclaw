@@ -8,6 +8,9 @@
   - 验证：`bash ./e2e_test/gateway_agent_regression.sh`、`cd electron && npm run build`、`make build`
 
 ### Added
+- **支持 Codex 和 Claude Code 订阅**：桌面模型配置可检查本机官方 CLI 登录，并选择订阅为默认模型。文本对话和工具请求通过现有 Gateway 路由，现有 API 提供商继续独立配置。
+  - `internal/providers/`、`internal/webui/`、`internal/cli/`、`electron/src/renderer/`
+  - 验证：`go test ./internal/webui -run TestSubscriptionGatewayStatusConfigAndToolRoundTrip`、Electron 编译与 Windows 打包
 - **新增 Xiaomi MiMo 模型提供商与设置页支持**：后端 provider 注册表、配置解析、默认 API Base、连接测试/模型拉取默认地址已支持 `xiaomi`；Electron 设置页新增 Xiaomi 预设、已知 provider 识别与 MiMo 默认模型，文档补充 Xiaomi MiMo 配置示例
   - `internal/providers/registry.go`、`internal/providers/factory.go`、`internal/providers/openai.go`、`internal/providers/capabilities.go`、`internal/config/schema.go`、`internal/config/config_test.go`、`internal/providers/*_test.go`、`internal/webui/server.go`、`internal/webui/server_test.go`、`electron/src/renderer/types/providers.ts`、`electron/src/renderer/views/SettingsView.tsx`、`electron/src/renderer/hooks/useGateway.ts`、`README.zh.md`、`internal/providers/README.md`、`e2e_test/tools_test.sh`
   - 验证：`go test ./internal/providers ./internal/config ./internal/webui`、`cd electron && npm run build`、`bash ./e2e_test/tools_test.sh`、`make build`

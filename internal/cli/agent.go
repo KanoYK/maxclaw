@@ -107,8 +107,8 @@ var agentCmd = &cobra.Command{
 		// 检查 API key
 		apiKey := cfg.GetAPIKey("")
 		apiBase := cfg.GetAPIBase("")
-		if apiKey == "" {
-			return fmt.Errorf("no API key configured. Set one in ~/.maxclaw/config.json")
+		if apiKey == "" && providers.SubscriptionRoute(cfg.Agents.Defaults.Model) == "" {
+			return fmt.Errorf("select a subscription model or configure an API key in ~/.maxclaw/config.json")
 		}
 
 		// 创建 Provider

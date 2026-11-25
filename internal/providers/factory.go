@@ -11,6 +11,9 @@ const (
 // NewProvider creates the appropriate runtime provider implementation for the
 // configured model/provider pair.
 func NewProvider(apiKey, apiBase, apiFormat, defaultModel string, maxTokens int, temperature float64, supportsImageInput func(model string) bool) (LLMProvider, error) {
+	if SubscriptionRoute(defaultModel) != "" {
+		return &SubscriptionProvider{model: defaultModel}, nil
+	}
 	switch ResolveProviderKind(defaultModel, apiBase, apiFormat) {
 	case providerKindAnthropic:
 		return NewAnthropicProvider(apiKey, apiBase, defaultModel, maxTokens, temperature, supportsImageInput)

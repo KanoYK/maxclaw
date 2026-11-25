@@ -1217,12 +1217,15 @@ func (s *Server) applyRuntimeModelConfig(cfg *config.Config) error {
 
 	model := cfg.Agents.Defaults.Model
 	if model == "" {
+		s.agentLoop.UpdateRuntimeModel(providers.NewUnavailableProvider("", "select a model in MaxClaw settings"), "")
 		return nil
 	}
 
 	apiKey := cfg.GetAPIKey(model)
-	if apiKey == "" {
-		return fmt.Errorf("no API key configured for model %s", model)
+	if apiKey == "" && providers.SubscriptionRoute(model) == "" {
+		reason := fmt.Sprintf("no API key configured for model %s", model)
+		s.agentLoop.UpdateRuntimeModel(providers.NewUnavailableProvider(model, reason), model)
+		return nil
 	}
 	apiBase := cfg.GetAPIBase(model)
 
@@ -1659,6 +1662,15 @@ func (s *Server) handleTestProvider(w http.ResponseWriter, r *http.Request) {
 	var req ProviderTestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.APIFormat == providers.CodexCLI || req.APIFormat == providers.ClaudeCode {
+		if err := providers.CheckSubscriptionLogin(r.Context(), req.APIFormat); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, map[string]bool{"ok": true})
 		return
 	}
 

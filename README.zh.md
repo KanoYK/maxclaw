@@ -158,6 +158,17 @@ Linux 默认会安装并启动：
 
 安装后请编辑 `~/.maxclaw/config.json` 填写 API Key 与模型。
 
+## 订阅登录（Windows 桌面版）
+
+在 **设置 → 模型配置 → 添加提供商** 中选择 **Codex (ChatGPT) · 订阅** 或 **Claude Code · 订阅**。安装对应的官方原生 CLI，确认它在 PATH 上，在 PowerShell 运行：
+
+- Codex 使用 `codex login`，选择用 ChatGPT 账号登录。[官方 CLI 安装](https://learn.chatgpt.com/docs/codex/cli)
+- Claude Code 使用 `claude auth login`，选择有订阅权益的 Claude 账号。[官方 CLI 安装](https://code.claude.com/docs/en/quickstart)
+
+回到 MaxClaw，点击 **检查订阅登录**，通过后点 **保存并设为默认**。选择的 CLI 保管登录并处理会话请求。订阅连接目前支持文本和 MaxClaw 工具，每轮完成后显示回复。
+
+Antigravity 个人订阅在 Google 官方 App 或 CLI 中使用。MaxClaw 的 Gemini 提供商支持 Google AI Studio API Key。[Google Antigravity FAQ](https://antigravity.google/docs/faq)
+
 ## 配置文件
 路径：`~/.maxclaw/config.json`
 

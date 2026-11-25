@@ -361,10 +361,11 @@ export function useGateway() {
     const models: Array<{ id: string; name: string; provider: string }> = [];
     const seen = new Set<string>();
     const configuredProviderKeys = Object.entries(providers)
-      .filter(([, providerConfig]) => Boolean(providerConfig?.apiKey) || Boolean(providerConfig?.apiBase))
+      .filter(([key, providerConfig]) => Boolean(providerConfig?.apiKey) || Boolean(providerConfig?.apiBase)
+        || ((key === 'codex-cli' || key === 'claude-code') && providerConfig?.apiFormat === key))
       .map(([providerKey]) => providerKey);
 
-    const addModel = (modelId: string, provider: string) => {
+    const addModel = (modelId: string, provider: string, name?: string) => {
       if (!modelId || seen.has(modelId)) {
         return;
       }
@@ -372,7 +373,7 @@ export function useGateway() {
       seen.add(modelId);
       models.push({
         id: modelId,
-        name: modelId.split('/').pop() || modelId,
+        name: name || modelId.split('/').pop() || modelId,
         provider
       });
     };
@@ -383,7 +384,7 @@ export function useGateway() {
       );
       if (configuredModels.length > 0) {
         for (const model of configuredModels) {
-          addModel(model.id, providerKey);
+          addModel(model.id, providerKey, providerKey === 'codex-cli' || providerKey === 'claude-code' ? model.name : undefined);
         }
         continue;
       }

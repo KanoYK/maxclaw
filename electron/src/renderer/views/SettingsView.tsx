@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState, setTheme, setLanguage, setRenderThinkTags } from '../store';
 import { useTranslation } from '../i18n';
-import { ProviderConfig, PRESET_PROVIDERS } from '../types/providers';
+import { ProviderConfig, PRESET_PROVIDERS, isSubscriptionFormat, SUBSCRIPTION_PROVIDERS } from '../types/providers';
 import { ProviderEditor } from '../components/ProviderEditor';
 import { EmailConfig } from '../components/EmailConfig';
 import { IMBotConfig } from '../components/IMBotConfig';
@@ -25,6 +25,25 @@ interface ShortcutsState {
 }
 
 type SettingsCategory = 'general' | 'providers' | 'channels' | 'gateway' | 'advanced';
+
+function serializeProviders(providers: ProviderConfig[]) {
+  return Object.fromEntries(providers.map((provider) => {
+    const subscription = isSubscriptionFormat(provider.apiFormat);
+    const key = subscription ? provider.apiFormat : provider.name.toLowerCase().replace(/\s+/g, '');
+    return [key, {
+      apiKey: subscription ? '' : provider.apiKey,
+      apiBase: subscription ? undefined : provider.baseURL,
+      apiFormat: provider.apiFormat,
+      models: provider.models.filter((model) => model.id.trim()).map((model) => ({
+        id: subscription ? key + '/' + model.id.trim() : model.id.trim(),
+        name: model.name.trim(),
+        enabled: model.enabled !== false,
+        maxTokens: model.maxTokens,
+        supportsImageInput: subscription ? false : model.supportsImageInput,
+      })),
+    }];
+  }));
+}
 
 export function SettingsView() {
   const dispatch = useDispatch();
@@ -52,6 +71,8 @@ export function SettingsView() {
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [editingProvider, setEditingProvider] = useState<ProviderConfig | null>(null);
   const [showAddProvider, setShowAddProvider] = useState(false);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [savingProvider, setSavingProvider] = useState(false);
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general');
 
   const [shortcuts, setShortcuts] = useState<ShortcutsState>({
@@ -114,19 +135,23 @@ export function SettingsView() {
           ]);
           const loadedProviders: ProviderConfig[] = [];
           Object.entries(config.providers).forEach(([key, value]: [string, any]) => {
-            if (value && (value.apiKey || value.apiBase)) {
+            const subscription = value?.apiFormat === key && isSubscriptionFormat(key) ? SUBSCRIPTION_PROVIDERS[key] : null;
+            if (value && (value.apiKey || value.apiBase || subscription)) {
               const isKnown = knownProviders.has(key.toLowerCase());
-              const type = isKnown
-                ? (key === 'anthropic' ? 'anthropic' : 'openai')
-                : 'custom';
+              const type = key === 'anthropic' || key === 'claude-code' ? 'anthropic'
+                : isKnown || subscription ? 'openai' : 'custom';
+              const models: ProviderConfig['models'] = Array.isArray(value.models) ? value.models : [];
               loadedProviders.push({
                 id: key,
-                name: key.charAt(0).toUpperCase() + key.slice(1),
-                type: type as 'openai' | 'anthropic' | 'custom',
+                name: subscription?.name || (key.charAt(0).toUpperCase() + key.slice(1)),
+                type,
                 apiKey: value.apiKey || '',
                 baseURL: value.apiBase || '',
                 apiFormat: value.apiFormat || (key === 'anthropic' ? 'anthropic' : 'openai'),
-                models: Array.isArray(value.models) ? value.models : [],
+                models: subscription ? models.map((model) => ({
+                  ...model,
+                  id: model.id.startsWith(key + '/') ? model.id.slice(key.length + 1) : model.id,
+                })) : models,
                 enabled: true,
               });
             }
@@ -318,16 +343,20 @@ export function SettingsView() {
   };
 
   const handleAddProvider = (preset: typeof PRESET_PROVIDERS[0]) => {
+    const subscription = isSubscriptionFormat(preset.apiFormat);
     const newProvider: ProviderConfig = {
       ...preset,
-      id: `${Date.now()}`,
+      id: subscription ? preset.apiFormat : `${Date.now()}`,
       apiKey: '',
     };
-    setEditingProvider(newProvider);
+    setProviderError(null);
+    setEditingProvider((subscription && providers.find((provider) => provider.id === preset.apiFormat)) || newProvider);
     setShowAddProvider(false);
   };
 
   const handleSaveProvider = async (provider: ProviderConfig) => {
+    setSavingProvider(true);
+    setProviderError(null);
     try {
       const existingIndex = providers.findIndex((p) => p.id === provider.id);
       let newProviders;
@@ -339,31 +368,22 @@ export function SettingsView() {
         newProviders = [...providers, provider];
       }
 
-      // Convert to gateway config format
-      const gatewayProviders: Record<string, { apiKey: string; apiBase?: string; apiFormat?: string; models?: Array<{ id: string; name?: string; enabled: boolean; maxTokens?: number; supportsImageInput?: boolean }> }> = {};
-      newProviders.forEach((p) => {
-        const key = p.name.toLowerCase().replace(/\s+/g, '');
-        gatewayProviders[key] = {
-          apiKey: p.apiKey,
-          apiBase: p.baseURL,
-          apiFormat: p.apiFormat,
-          models: p.models
-            .map((model) => ({
-              id: model.id.trim(),
-              name: model.name.trim(),
-              enabled: model.enabled !== false,
-              maxTokens: model.maxTokens,
-              supportsImageInput: model.supportsImageInput,
-            }))
-            .filter((model) => model.id),
-        };
-      });
+      const gatewayProviders = serializeProviders(newProviders);
+      let agents;
+      if (isSubscriptionFormat(provider.apiFormat)) {
+        const model = gatewayProviders[provider.apiFormat].models.find((item) => item.enabled);
+        if (!model) throw new Error('No enabled subscription model');
+        const response = await fetch('http://127.0.0.1:18890/api/config');
+        if (!response.ok) throw new Error(`read config failed: ${response.status}`);
+        const current = await response.json();
+        agents = { ...current.agents, defaults: { ...current.agents.defaults, model: model.id } };
+      }
 
       // Update Gateway config. Provider/model changes are hot-applied by /api/config.
       const response = await fetch('http://127.0.0.1:18890/api/config', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ providers: gatewayProviders }),
+        body: JSON.stringify({ providers: gatewayProviders, agents }),
       });
 
       if (response.ok) {
@@ -374,6 +394,9 @@ export function SettingsView() {
       }
     } catch (error) {
       console.error('Failed to save provider:', error);
+      setProviderError(t('settings.subscription.saveError'));
+    } finally {
+      setSavingProvider(false);
     }
   };
 
@@ -426,35 +449,29 @@ export function SettingsView() {
 
   const handleDeleteProvider = async (id: string) => {
     const newProviders = providers.filter((p) => p.id !== id);
-    setProviders(newProviders);
-
-    // Update Gateway config
-    const gatewayProviders: Record<string, { apiKey: string; apiBase?: string; apiFormat?: string; models?: Array<{ id: string; name?: string; enabled: boolean; maxTokens?: number; supportsImageInput?: boolean }> }> = {};
-    newProviders.forEach((p) => {
-      const key = p.name.toLowerCase().replace(/\s+/g, '');
-      gatewayProviders[key] = {
-        apiKey: p.apiKey,
-        apiBase: p.baseURL,
-        apiFormat: p.apiFormat,
-        models: p.models
-          .map((model) => ({
-            id: model.id.trim(),
-            name: model.name.trim(),
-            enabled: model.enabled !== false,
-            maxTokens: model.maxTokens,
-            supportsImageInput: model.supportsImageInput,
-          }))
-          .filter((model) => model.id),
-      };
-    });
-
-    const response = await fetch('http://127.0.0.1:18890/api/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ providers: gatewayProviders }),
-    });
-    if (!response.ok) {
-      throw new Error(`delete provider save failed: ${response.status}`);
+    const gatewayProviders = serializeProviders(newProviders);
+    setProviderError(null);
+    try {
+      let agents;
+      if (isSubscriptionFormat(id)) {
+        const response = await fetch('http://127.0.0.1:18890/api/config');
+        if (!response.ok) throw new Error(`read config failed: ${response.status}`);
+        const current = await response.json();
+        if (current.agents?.defaults?.model?.startsWith(id + '/')) {
+          const model = Object.values(gatewayProviders).flatMap((p) => p.models).find((item) => item.enabled)?.id || '';
+          agents = { ...current.agents, defaults: { ...current.agents.defaults, model } };
+        }
+      }
+      const response = await fetch('http://127.0.0.1:18890/api/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providers: gatewayProviders, agents }),
+      });
+      if (!response.ok) throw new Error(`delete provider save failed: ${response.status}`);
+      setProviders(newProviders);
+    } catch (error) {
+      console.error('Failed to delete provider:', error);
+      setProviderError(t('settings.subscription.saveError'));
     }
   };
 
@@ -793,10 +810,13 @@ export function SettingsView() {
             {activeCategory === 'providers' && (
               <section className="space-y-4">
                 <h3 className="text-lg font-semibold">{t('settings.providers')}</h3>
+                {providerError && <p role="alert" className="text-sm text-danger">{providerError}</p>}
 
                 {editingProvider ? (
                   <ProviderEditor
                     provider={editingProvider}
+                    key={editingProvider.id}
+                    saving={savingProvider}
                     onSave={handleSaveProvider}
                     onTest={handleTestConnection}
                     onFetchModels={handleFetchModels}
@@ -812,7 +832,7 @@ export function SettingsView() {
                           onClick={() => handleAddProvider(preset)}
                           className="rounded-lg border border-border px-3 py-2 text-sm hover:bg-secondary"
                         >
-                          + {preset.name}
+                          + {preset.name}{isSubscriptionFormat(preset.apiFormat) && ` · ${t('settings.subscription.label')}`}
                         </button>
                       ))}
                       <button
@@ -850,7 +870,7 @@ export function SettingsView() {
                           <div>
                             <h4 className="font-medium">{provider.name}</h4>
                             <p className="text-xs text-muted">
-                              {provider.baseURL || 'Default endpoint'}
+                              {isSubscriptionFormat(provider.apiFormat) ? t('settings.subscription.label') : provider.baseURL || 'Default endpoint'}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">

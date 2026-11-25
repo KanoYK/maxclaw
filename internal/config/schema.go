@@ -427,6 +427,9 @@ func (c *Config) GetAPIKey(model string) string {
 	if model == "" {
 		model = c.Agents.Defaults.Model
 	}
+	if providers.SubscriptionRoute(model) != "" {
+		return ""
+	}
 	model = strings.ToLower(model)
 
 	providerMap := c.providerConfigMap()
@@ -458,6 +461,9 @@ func (c *Config) GetAPIKey(model string) string {
 func (c *Config) GetAPIBase(model string) string {
 	if model == "" {
 		model = c.Agents.Defaults.Model
+	}
+	if providers.SubscriptionRoute(model) != "" {
+		return ""
 	}
 	model = strings.ToLower(model)
 
@@ -657,7 +663,7 @@ func (c *Config) SupportsImageInput(model string) bool {
 	if model == "" {
 		model = c.Agents.Defaults.Model
 	}
-	if model == "" {
+	if model == "" || providers.SubscriptionRoute(model) != "" {
 		return false
 	}
 

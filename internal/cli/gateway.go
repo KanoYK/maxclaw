@@ -71,13 +71,13 @@ var gatewayCmd = &cobra.Command{
 		cronService.SetJobHandler(func(job *cron.Job) (string, error) {
 			// Manual runs should execute directly and return results immediately.
 			if job != nil && job.IsManualRun {
-				return executeCronJob(cfg, apiKey, apiBase, cronService, job)
+				return executeCronJob(cronService, job)
 			}
 			// Scheduled jobs with delivery config go through the message bus for async processing.
 			if job != nil && job.Payload.Deliver && len(job.Payload.Channels) > 0 && job.Payload.To != "" {
 				return enqueueCronJob(messageBus, job)
 			}
-			return executeCronJob(cfg, apiKey, apiBase, cronService, job)
+			return executeCronJob(cronService, job)
 		})
 
 		agentLoop := agent.NewAgentLoop(
@@ -400,11 +400,10 @@ func stageInboundMedia(manager *media.Manager, channel string, attachment *bus.M
 }
 
 func buildGatewayProvider(cfg *config.Config, apiKey, apiBase string) (providers.LLMProvider, string, error) {
-	if apiKey == "" {
-		return &unavailableProvider{
-			model:  cfg.Agents.Defaults.Model,
-			reason: "no API key configured. Set one in ~/.maxclaw/config.json (or via Web UI settings) to enable model requests",
-		}, "No API key configured. Gateway started in configuration-only mode; model requests will fail until key is set.", nil
+	if apiKey == "" && providers.SubscriptionRoute(cfg.Agents.Defaults.Model) == "" {
+		return providers.NewUnavailableProvider(cfg.Agents.Defaults.Model,
+				"no API key configured. Add a subscription or API key in model settings"),
+			"Gateway started in configuration-only mode. Add a subscription or API key in model settings.", nil
 	}
 
 	provider, err := providers.NewProvider(
@@ -420,34 +419,6 @@ func buildGatewayProvider(cfg *config.Config, apiKey, apiBase string) (providers
 		return nil, "", fmt.Errorf("failed to create provider: %w", err)
 	}
 	return provider, "", nil
-}
-
-type unavailableProvider struct {
-	model  string
-	reason string
-}
-
-func (p *unavailableProvider) Chat(ctx context.Context, messages []providers.Message, tools []map[string]interface{}, model string) (*providers.Response, error) {
-	return nil, fmt.Errorf("%s", p.reason)
-}
-
-func (p *unavailableProvider) ChatStream(ctx context.Context, messages []providers.Message, tools []map[string]interface{}, model string, handler providers.StreamHandler) error {
-	err := fmt.Errorf("%s", p.reason)
-	if handler != nil {
-		handler.OnError(err)
-	}
-	return err
-}
-
-func (p *unavailableProvider) GetDefaultModel() string {
-	if p.model != "" {
-		return p.model
-	}
-	return "gpt-4"
-}
-
-func (p *unavailableProvider) SupportsImageInput(model string) bool {
-	return false
 }
 
 // handleOutboundMessages 处理出站消息

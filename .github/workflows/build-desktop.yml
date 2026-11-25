@@ -98,6 +98,9 @@ jobs:
           go build -o build/maxclaw.exe ./cmd/maxclaw
           go build -o build/maxclaw-gateway.exe ./cmd/maxclaw-gateway
 
+      - name: Test subscription routing (Windows)
+        run: go test ./internal/webui -run TestSubscriptionGatewayStatusConfigAndToolRoundTrip
+
       - name: Compile Electron app (Windows)
         working-directory: electron
         run: npm run build

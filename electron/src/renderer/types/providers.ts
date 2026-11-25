@@ -6,18 +6,49 @@ export interface ModelConfig {
   supportsImageInput?: boolean;
 }
 
+export const SUBSCRIPTION_PROVIDERS = {
+  'codex-cli': {
+    name: 'Codex (ChatGPT)',
+    command: 'codex login',
+    installURL: 'https://learn.chatgpt.com/docs/codex/cli',
+  },
+  'claude-code': {
+    name: 'Claude Code',
+    command: 'claude auth login',
+    installURL: 'https://code.claude.com/docs/en/quickstart',
+  },
+} as const;
+
+export function isSubscriptionFormat(format?: string): format is keyof typeof SUBSCRIPTION_PROVIDERS {
+  return format === 'codex-cli' || format === 'claude-code';
+}
+
 export interface ProviderConfig {
   id: string;
   name: string;
   type: 'openai' | 'anthropic' | 'custom';
   apiKey: string;
   baseURL?: string;
-  apiFormat: 'openai' | 'anthropic';
+  apiFormat: 'openai' | 'anthropic' | keyof typeof SUBSCRIPTION_PROVIDERS;
   models: ModelConfig[];
   enabled: boolean;
 }
 
 export const PRESET_PROVIDERS: Omit<ProviderConfig, 'id' | 'apiKey'>[] = [
+  {
+    name: SUBSCRIPTION_PROVIDERS['codex-cli'].name,
+    type: 'openai',
+    apiFormat: 'codex-cli',
+    models: [{ id: 'default', name: 'Codex (ChatGPT)', enabled: true }],
+    enabled: false,
+  },
+  {
+    name: SUBSCRIPTION_PROVIDERS['claude-code'].name,
+    type: 'anthropic',
+    apiFormat: 'claude-code',
+    models: [{ id: 'default', name: 'Claude Code', enabled: true }],
+    enabled: false,
+  },
   {
     name: 'OpenRouter',
     type: 'openai',
